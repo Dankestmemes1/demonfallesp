@@ -1,0 +1,86 @@
+shared.auto_update_npcs = true
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local HPBarTemplate = ReplicatedStorage.UI:FindFirstChild("EnemyGui")
+if HPBarTemplate then HPBarTemplate = HPBarTemplate:Clone() else return end
+
+local function onCharacterAdded(Character, Player, Format)
+    local Head = Character:WaitForChild("Head")
+    if Head:FindFirstChild("EnemyGui") then return end
+
+    local HPBar = HPBarTemplate:Clone()
+    HPBar.MaxDistance = 500
+    HPBar.Health.TextLabel.Text = Player.Name
+    HPBar.Health.Bar.Size = UDim2.new(Character.Health.Value / Player.MaxHealth.Value, 0, 1, 0)
+    HPBar.Parent = Head
+    
+    if Format then
+        local Name = Player.Name:gsub("(%l)(%u)","%1 %2")
+        if Player.MaxHealth.Value > 100 then
+            HPBar.Health.TextLabel.Text = Name .. " 👑"
+        else
+            HPBar.Health.TextLabel.Text = Name
+        end
+    end
+    
+    local TextLabel = Instance.new("TextLabel")
+    TextLabel.Text = ("%d/%d"):format(Character.Health.Value, Player.MaxHealth.Value)
+    TextLabel.Font = Enum.Font.GothamSemibold
+    TextLabel.BackgroundTransparency = 1
+    TextLabel.TextScaled = true
+    TextLabel.Size = UDim2.new(1, 0, 1, 0)
+    TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TextLabel.Parent = HPBar.Health
+    
+    Character.Health:GetPropertyChangedSignal("Value"):Connect(function()
+        local Health = Character.Health.Value
+        local MaxHealth = Player.MaxHealth.Value
+        
+        HPBar.Health.Bar:TweenSize(UDim2.new(Health / MaxHealth, 0, 1, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.25, true)
+        TextLabel.Text = ("%d/%d"):format(Character.Health.Value, Player.MaxHealth.Value)
+    end)
+end
+
+local function onPlayerAdded(Player)
+    local Character = Player.Character or Player.CharacterAdded:Wait()
+    
+    if Character then
+        onCharacterAdded(Character, Player)
+    end
+    
+    Player.CharacterAdded:Connect(function(Character)
+        onCharacterAdded(Character, Player)
+    end)
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+for _, Player in ipairs(Players:GetPlayers()) do
+    coroutine.wrap(onPlayerAdded)(Player)
+end
+
+workspace.ChildAdded:Connect(function(childObject)
+    local humanoidModel = childObject:WaitForChild("Head", math.huge)
+    if humanoidModel and childObject:WaitForChild("MaxHealth", 10) then
+        coroutine.wrap(onCharacterAdded)(childObject, childObject, true)
+    end
+end)
+
+for _, Model in ipairs(workspace:GetChildren()) do
+    local Head = Model:FindFirstChild("Head")
+    if Head and Model:FindFirstChild("MaxHealth") then
+        coroutine.wrap(onCharacterAdded)(Model, Model, true)
+    end
+end
+
+while true do
+    if shared.auto_update_npcs then
+        for _, Model in ipairs(workspace:GetChildren()) do
+            local Head = Model:FindFirstChild("Head")
+            if Head and Model:FindFirstChild("MaxHealth") then
+                coroutine.wrap(onCharacterAdded)(Model, Model, true)
+            end
+        end
+    end
+    wait(5)
+end
